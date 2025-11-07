@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maid Scheduling Service</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f7f9fb; }
+        /* Custom scrollbar for better aesthetics */
+        .custom-scroll::-webkit-scrollbar { width: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background-color: #9ca3af; border-radius: 2px; }
+        .custom-scroll { scrollbar-width: thin; scrollbar-color: #9ca3af #f7f9fb; }
+        .container-bg { background-color: white; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
+        .tab-active { border-color: #10b981; color: #10b981; }
+    </style>
+</head>
+<body>
+
+    <div id="app" class="min-h-screen p-4 sm:p-6 flex flex-col items-center">
+        <!-- Header & Auth Info -->
+        <header class="w-full max-w-4xl mb-6 flex justify-between items-center">
+            <h1 class="text-3xl font-extrabold text-gray-800">Maid Scheduler</h1>
+            <p id="user-info" class="text-xs text-gray-500 bg-gray-100 p-2 rounded-lg truncate max-w-[150px] sm:max-w-xs">Loading User...</p>
+        </header>
+
+        <!-- Main Content Container -->
+        <div class="w-full max-w-4xl container-bg rounded-xl p-4 sm:p-6">
+            <!-- Loading and Error State -->
+            <div id="status-message" class="text-center p-4 text-sm text-gray-600">Initializing Application...</div>
+
+            <!-- Navigation Tabs -->
+            <div id="tabs" class="flex border-b border-gray-200 mb-6">
+                <button data-tab="dashboard" class="py-3 px-4 text-sm font-medium text-gray-500 border-b-2 border-transparent hover:border-gray-300 transition duration-150 ease-in-out tab-active" onclick="handleTabClick('dashboard')">Dashboard</button>
+                <button data-tab="schedule" class="py-3 px-4 text-sm font-medium text-gray-500 border-b-2 border-transparent hover:border-gray-300 transition duration-150 ease-in-out" onclick="handleTabClick('schedule')">New Booking</button>
+                <button data-tab="manage" class="py-3 px-4 text-sm font-medium text-gray-500 border-b-2 border-transparent hover:border-gray-300 transition duration-150 ease-in-out" onclick="handleTabClick('manage')">Management</button>
+            </div>
+
+            <!-- Tab Content -->
+            <div id="content">
+                <!-- Dashboard Content (NOW SPLIT INTO TWO COLUMNS) -->
+                <div id="tab-dashboard" class="tab-content">
+                    <h2 class="text-2xl font-semibold text-gray-700 mb-4">Scheduling Overview</h2>
+                    
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        
+                        <!-- Column 1: Upcoming Bookings -->
+                        <div>
+                            <h3 class="text-xl font-bold text-emerald-600 mb-3 border-b pb-1">Upcoming Cleanings</h3>
+                            <div id="upcoming-bookings-list" class="space-y-3 custom-scroll max-h-[600px] overflow-y-auto">
+                                <p class="text-gray-500">Loading upcoming bookings...</p>
+                            </div>
+                        </div>
+
+                        <!-- Column 2: Booking History -->
+                        <div>
+                            <h3 class="text-xl font-bold text-gray-500 mb-3 border-b pb-1">Booking History (Past)</h3>
+                            <div id="history-bookings-list" class="space-y-3 custom-scroll max-h-[600px] overflow-y-auto">
+                                <p class="text-gray-500">Loading booking history...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Schedule Booking Form Content -->
+                <div id="tab-schedule" class="tab-content hidden">
+                    <h2 class="text-2xl font-semibold text-gray-700 mb-4">Create New Booking</h2>
+                    <div id="schedule-form" class="space-y-4">
+
+                        <!-- 1. Unit Selection -->
+                        <div>
+                            <label for="unit-select" class="block text-sm font-medium text-gray-700 mb-1">1. Select Unit</label>
+                            <select id="unit-select" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500" onchange="updateBookingUI()">
+                                <option value="">-- Select an Apartment Unit --</option>
+                            </select>
+                            <p id="unit-rate-display" class="mt-1 text-sm text-gray-500"></p>
+                        </div>
+
+                        <!-- 2. Employee Selection -->
+                        <div>
+                            <label for="employee-select" class="block text-sm font-medium text-gray-700 mb-1">2. Assign Maid or Manager</label>
+                            <select id="employee-select" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500" onchange="updateBookingUI()">
+                                <option value="">-- Select Employee --</option>
+                            </select>
+                        </div>
+
+                        <!-- 3. Time Slot & Date -->
+                        <div>
+                            <label for="booking-date" class="block text-sm font-medium text-gray-700 mb-1">3. Date & Start Time</label>
+                            <input type="datetime-local" id="booking-date" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500" value="" min="" onchange="updateBookingUI()">
+                        </div>
+                        
+                        <!-- 4. Job Brief Generation (NEW FEATURE) -->
+                        <div>
+                            <label for="job-brief" class="block text-sm font-medium text-gray-700 mb-1">4. Job Brief & Instructions (Saved for Employee)</label>
+                            <textarea id="job-brief" rows="4" placeholder="Generate a brief or type specific instructions here... E.g., 'Focus on kitchen countertops.'" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"></textarea>
+                            <button id="generate-brief-btn" class="mt-2 text-sm bg-blue-500 text-white p-2 rounded-lg font-semibold hover:bg-blue-600 transition disabled:bg-gray-400" onclick="handleJobBriefGeneration()">
+                                ✨ Generate Job Brief
+                            </button>
+                        </div>
+
+                        <!-- 5. Confirmation Contact (CLIENT) -->
+                        <div>
+                            <label for="contact-input" class="block text-sm font-medium text-gray-700 mb-1">5. Client Confirmation Contact (Email/Phone)</label>
+                            <input type="text" id="contact-input" placeholder="Enter client email or phone number" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500" required oninput="updateBookingUI()">
+                            <p class="mt-1 text-xs text-gray-500">
+                                <strong class="text-blue-600">Note:</strong> Confirmation content is generated by the Gemini API upon booking for both the client and the employee.
+                            </p>
+                        </div>
+
+                        <!-- 6. Final Bill (Now an Input Field) -->
+                        <div class="bg-emerald-50 p-4 rounded-lg border border-emerald-200">
+                            <label class="block text-lg font-bold text-emerald-800">6. Final Agreed Bill ($)</label>
+                            <input type="number" id="bill-input" min="0" step="1.00" class="mt-1 text-3xl font-extrabold text-emerald-600 w-full p-2 border-none bg-transparent focus:ring-0" value="0.00" oninput="updateBookingUI()">
+                        </div>
+
+                        <button id="submit-booking" class="w-full bg-emerald-600 text-white p-3 rounded-lg font-semibold hover:bg-emerald-700 transition duration-150 ease-in-out disabled:bg-gray-400" onclick="createBooking()">Confirm Booking & Generate Confirmation</button>
+                    </div>
+                </div>
+
+                <!-- Management Content -->
+                <div id="tab-manage" class="tab-content hidden">
+                    <h2 class="text-2xl font-semibold text-gray-700 mb-4">Manage Units & Employees</h2>
+
+                    <!-- Unit Management -->
+                    <div class="mb-8 border-b pb-4">
+                        <h3 class="text-xl font-semibold text-gray-600 mb-3">Apartment Units</h3>
+                        <form id="add-unit-form" class="space-y-3 p-4 bg-gray-50 rounded-lg">
+                            <p class="font-medium text-gray-700">Add New Unit</p>
+                            <input type="text" id="unit-name" placeholder="Unit Name (e.g., A101)" required class="w-full p-2 border rounded-lg">
+                            <input type="text" id="unit-address" placeholder="Address/Location" required class="w-full p-2 border rounded-lg">
+                            <!-- UPDATED: Placeholder now just says "Default Rate" -->
+                            <input type="number" id="unit-rate" placeholder="Default Rate ($)" min="10.00" step="0.50" required class="w-full p-2 border rounded-lg">
+                            <button type="submit" class="w-full bg-blue-500 text-white p-2 rounded-lg hover:bg-blue-600 transition">Add Unit</button>
+                        </form>
+                        <ul id="units-list" class="mt-4 space-y-2 custom-scroll max-h-48 overflow-y-auto">
+                            <!-- Units will be injected here -->
+                        </ul>
+                    </div>
+
+                    <!-- Employee Management -->
+                    <div>
+                        <h3 class="text-xl font-semibold text-gray-600 mb-3">Maid Employees</h3>
+                        <form id="add-employee-form" class="space-y-3 p-4 bg-gray-50 rounded-lg">
+                            <p class="font-medium text-gray-700">Add New Employee</p>
+                            <input type="text" id="employee-name" placeholder="Employee Name" required class="w-full p-2 border rounded-lg">
+                            <input type="email" id="employee-email" placeholder="Employee Email (for notifications)" required class="w-full p-2 border rounded-lg">
+                            <input type="tel" id="employee-phone" placeholder="Employee Phone (for notifications)" required class="w-full p-2 border rounded-lg">
+                            <select id="employee-role" class="w-full p-2 border rounded-lg">
+                                <option value="Maid">Maid</option>
+                                <option value="Manager">Manager</option>
+                            </select>
+                            <button type="submit" class="w-full bg-blue-500 text-white p-2 rounded-lg hover:bg-blue-600 transition">Add Employee</button>
+                        </form>
+                        <ul id="employees-list" class="mt-4 space-y-2 custom-scroll max-h-48 overflow-y-auto">
+                            <!-- Employees will be injected here -->
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal for custom alerts/confirmation (instead of alert/confirm) -->
+        <div id="modal-container" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-50 hidden flex items-center justify-center p-4" onclick="closeModal(event)">
+            <div id="modal-box" class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm sm:max-w-lg transform transition-all duration-300" onclick="event.stopPropagation()">
+                <h3 id="modal-title" class="text-xl font-bold mb-3 text-gray-800"></h3>
+                <p id="modal-body" class="text-gray-600 mb-5 whitespace-pre-wrap"></p>
+                <div id="modal-actions" class="flex justify-end space-x-3">
+                    <button id="modal-cancel" class="py-2 px-4 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition duration-150">Cancel</button>
+                    <button id="modal-confirm" class="py-2 px-4 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition duration-150">Confirm</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Firebase SDK Imports -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, addDoc, setDoc, deleteDoc, onSnapshot, collection, query, serverTimestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global variables provided by the environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let db;
+        let auth;
+        let currentUserId = 'anonymous-user'; // Default value before auth resolves
+
+        // Global state for application data
+        window.appState = {
+            units: [],
+            employees: [],
+            bookings: [],
+            currentTab: 'dashboard',
+            isAuthReady: false,
+        };
+
+        // DOM elements
+        const statusMessage = document.getElementById('status-message');
+        const unitSelect = document.getElementById('unit-select');
+        const employeeSelect = document.getElementById('employee-select');
+        const unitRateDisplay = document.getElementById('unit-rate-display');
+        const contactInput = document.getElementById('contact-input');
+        const billInput = document.getElementById('bill-input');
+        const jobBriefInput = document.getElementById('job-brief'); 
+        const generateBriefBtn = document.getElementById('generate-brief-btn');
+        const upcomingBookingsList = document.getElementById('upcoming-bookings-list');
+        const historyBookingsList = document.getElementById('history-bookings-list');
+        const unitsList = document.getElementById('units-list');
+        const employeesList = document.getElementById('employees-list');
+        const submitBookingButton = document.getElementById('submit-booking');
+        const userInfo = document.getElementById('user-info');
+        const bookingDateInput = document.getElementById('booking-date');
+        
+        // --- Utility Functions ---
+
+        /**
+         * Shows a custom modal for user confirmation or alerts.
+         * @param {string} title
+         * @param {string} body
+         * @param {boolean} confirmNeeded
+         * @returns {Promise<boolean>}
+         */
+        window.showCustomModal = (title, body, confirmNeeded = false) => {
+            return new Promise(resolve => {
+                document.getElementById('modal-title').textContent = title;
+                document.getElementById('modal-body').innerHTML = body; // Use innerHTML for markdown formatting
+                document.getElementById('modal-container').classList.remove('hidden');
+
+                const confirmBtn = document.getElementById('modal-confirm');
+                const cancelBtn = document.getElementById('modal-cancel');
+                
+                // Set visibility of confirm/cancel based on confirmNeeded
+                confirmBtn.style.display = confirmNeeded ? 'inline-block' : 'none';
+                cancelBtn.style.display = confirmNeeded ? 'inline-block' : 'none';
+
+                // If not confirmation, make the modal resolve on click anywhere
+                if (!confirmNeeded) {
+                    confirmBtn.textContent = 'OK';
+                    confirmBtn.style.display = 'inline-block';
+                    confirmBtn.onclick = () => { window.closeModal(); resolve(true); };
+                }
+
+                const cleanup = (result) => {
+                    confirmBtn.onclick = null;
+                    cancelBtn.onclick = null;
+                    window.closeModal();
+                    resolve(result);
+                };
+
+                if (confirmNeeded) {
+                    confirmBtn.textContent = 'Confirm';
+                    confirmBtn.onclick = () => cleanup(true);
+                    cancelBtn.onclick = () => cleanup(false);
+                } else if (confirmBtn.style.display === 'inline-block') {
+                    // Handled above for the 'OK' button
+                }
+
+            });
+        };
+
+        window.closeModal = (event) => {
+            const container = document.getElementById('modal-container');
+            if (event && event.target !== container) return; // Only close if clicking the backdrop
+            container.classList.add('hidden');
+        };
+
+        // --- Gemini API Functions ---
+
+        /** Retries the API call with exponential backoff. */
+        const fetchWithRetry = async (url, payload) => {
+            for (let attempt = 0; attempt < 3; attempt++) {
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        if (response.status === 429 && attempt < 2) {
+                            const delay = Math.pow(2, attempt) * 1000 + Math.random() * 500;
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                            continue;
+                        }
+                        throw new Error(`API call failed with status: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                    if (text) {
+                        return text;
+                    } else {
+                        throw new Error("API response was empty or malformed.");
+                    }
+                } catch (error) {
+                    console.error(`Attempt ${attempt + 1} failed:`, error);
+                    if (attempt === 2) throw error; 
+                }
+            }
+            throw new Error("Failed to get response after multiple retries.");
+        };
+
+        /** Uses the Gemini API to generate the confirmation content. */
+        const generateConfirmationContent = async (details) => {
+            // Updated query to reflect fixed rate and employee contacts
+            const userQuery = `Generate a concise confirmation message for a maid service appointment. The message should be suitable for a text or email and should be directed to the client (Contact: ${details.clientContact}). Additionally, include a small, separate note at the end intended for the assigned employee, reminding them of the job details. Use '---' to clearly separate the client message from the employee note. The details are: Unit: ${details.unitName} at ${details.unitAddress}, Staff: ${details.employeeName}, Staff Contact: ${details.employeeEmail} / ${details.employeePhone}, Date/Time: ${details.dateTime}, Total Fixed Bill: $${details.calculatedBill}.`;
+            
+            const apiKey = "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                systemInstruction: {
+                    parts: [{ text: "You are a friendly and professional service assistant. Your output must contain the main confirmation text for the client, followed by a clear separation (---) and the notification for the employee." }]
+                },
+            };
+
+            return fetchWithRetry(apiUrl, payload);
+        };
+
+        /** Generates the Job Brief for the assigned employee. */
+        const generateJobBrief = async (unit, employee) => {
+             // UPDATED: Removed /hr reference
+             const userQuery = `Generate a detailed, bulleted job brief for a cleaning job at unit ${unit.name} (${unit.address}). The employee is a ${employee.role}. The default rate is $${unit.rate}. Include 5-7 core tasks expected (e.g., kitchen, floors, bath) and a final reminder to be punctual. Format the output using markdown.`;
+            
+            const apiKey = "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                systemInstruction: {
+                    parts: [{ text: "You are a scheduling and logistics manager. Provide the job brief in a clear, formatted text suitable for a maid/manager." }]
+                },
+            };
+
+            return fetchWithRetry(apiUrl, payload);
+        };
+        
+        /** Generates a Billing Summary for the client. */
+        const generateBillingSummary = async (booking, unit, employee) => {
+             const userQuery = `Generate a professional, 2-3 sentence justification for a client's bill. The final bill is $${booking.calculatedBill.toFixed(2)} for cleaning Unit ${unit.name} on ${new Date(booking.dateTime).toLocaleDateString()}. Mention the high standards of our service and the excellent staff, ${employee.name}.`;
+            
+            const apiKey = "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                systemInstruction: {
+                    parts: [{ text: "You are a professional billing representative. Provide a concise, polite justification, using markdown for emphasis." }]
+                },
+            };
+
+            return fetchWithRetry(apiUrl, payload);
+        };
+
+        // --- Event Handlers for New Features ---
+
+        window.handleJobBriefGeneration = async () => {
+            const unitId = unitSelect.value;
+            const employeeId = employeeSelect.value;
+
+            if (!unitId || !employeeId) {
+                return showCustomModal('Selection Required', 'Please select both a **Unit** and an **Employee** before generating a brief.');
+            }
+            
+            const selectedUnit = appState.units.find(u => u.id === unitId);
+            const selectedEmployee = appState.employees.find(e => e.id === employeeId);
+
+            generateBriefBtn.disabled = true;
+            generateBriefBtn.textContent = 'Generating...';
+
+            try {
+                const brief = await generateJobBrief(selectedUnit, selectedEmployee);
+                jobBriefInput.value = brief;
+                showCustomModal('Brief Generated!', 'The **Job Brief** has been successfully generated and placed in the instructions box below.');
+            } catch (error) {
+                showCustomModal('Generation Failed', `Could not generate job brief. Error: ${error.message}`);
+            } finally {
+                generateBriefBtn.disabled = false;
+                generateBriefBtn.textContent = '✨ Generate Job Brief';
+            }
+        };
+
+        window.handleBillingSummaryGeneration = async (bookingId) => {
+            const booking = appState.bookings.find(b => b.id === bookingId);
+            if (!booking) return;
+
+            const unit = appState.units.find(u => u.id === booking.unitId) || { name: 'N/A' };
+            const employee = appState.employees.find(e => e.id === booking.employeeId) || { name: 'N/A' };
+
+            const btn = event.target;
+            btn.disabled = true;
+            const originalText = btn.textContent;
+            btn.textContent = 'Generating...';
+
+            try {
+                const summary = await generateBillingSummary(booking, unit, employee);
+                showCustomModal(
+                    `✨ Billing Summary for ${unit.name}`,
+                    `This professional justification can be sent to the client: \n\n<div class="mt-3 p-4 bg-gray-100 rounded-lg border">${summary}</div>`,
+                    false
+                );
+            } catch (error) {
+                showCustomModal('Generation Failed', `Could not generate the billing summary. Error: ${error.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        };
+
+
+        // --- Firestore Interaction Functions ---
+
+        /** Sets up real-time listeners for all necessary collections. */
+        const setupFirestoreListeners = () => {
+            if (!db || !appState.isAuthReady) return;
+
+            const userBase = `artifacts/${appId}/users/${currentUserId}`;
+
+            // 1. Units Listener
+            onSnapshot(collection(db, `${userBase}/units`), (snapshot) => {
+                appState.units = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderUnits();
+                updateBookingUI();
+            }, (error) => console.error("Error fetching units:", error));
+
+            // 2. Employees Listener
+            onSnapshot(collection(db, `${userBase}/employees`), (snapshot) => {
+                appState.employees = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderEmployees();
+            }, (error) => console.error("Error fetching employees:", error));
+
+            // 3. Bookings Listener
+            onSnapshot(collection(db, `${userBase}/bookings`), (snapshot) => {
+                appState.bookings = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderBookings();
+            }, (error) => console.error("Error fetching bookings:", error));
+
+            statusMessage.textContent = 'Data is live and ready!';
+        };
+
+        /** Creates a new Booking in Firestore and generates confirmation text. */
+        window.createBooking = async () => {
+            const unitId = unitSelect.value;
+            const employeeId = employeeSelect.value;
+            const dateTime = bookingDateInput.value;
+            const clientContact = contactInput.value.trim(); // Client contact
+            const calculatedBill = parseFloat(billInput.value);
+            const jobBrief = jobBriefInput.value.trim(); 
+
+            if (!unitId || !employeeId || !dateTime || !clientContact || isNaN(calculatedBill) || calculatedBill < 0) {
+                return showCustomModal('Validation Error', 'Please ensure Unit, Employee, Date/Time, Client Contact, and a valid Bill are selected/entered.');
+            }
+            
+            const selectedUnit = appState.units.find(u => u.id === unitId);
+            const selectedEmployee = appState.employees.find(e => e.id === employeeId);
+
+            const userConfirmed = await showCustomModal(
+                'Confirm Booking',
+                `Schedule ${selectedUnit?.name || 'Unit'} with ${selectedEmployee?.name || 'Employee'} on **${new Date(dateTime).toLocaleString()}**. Final Bill: **$${calculatedBill.toFixed(2)}**.`,
+                true
+            );
+
+            if (!userConfirmed) return;
+
+            submitBookingButton.disabled = true;
+            submitBookingButton.textContent = 'Scheduling & Generating Confirmation...';
+
+            try {
+                // 1. Save Booking
+                const userBase = `artifacts/${appId}/users/${currentUserId}`;
+                await addDoc(collection(db, `${userBase}/bookings`), {
+                    unitId,
+                    employeeId,
+                    dateTime,
+                    calculatedBill,
+                    status: 'Scheduled',
+                    clientContact,
+                    jobBrief, 
+                    createdAt: serverTimestamp()
+                });
+                
+                // 2. Generate Confirmation Content (Original Feature)
+                const confirmationDetails = {
+                    unitName: selectedUnit.name,
+                    unitAddress: selectedUnit.address,
+                    employeeName: selectedEmployee.name,
+                    employeeEmail: selectedEmployee.email, // Pass employee contact
+                    employeePhone: selectedEmployee.phone, // Pass employee contact
+                    dateTime: new Date(dateTime).toLocaleString(),
+                    calculatedBill: calculatedBill.toFixed(2),
+                    clientContact: clientContact // Pass client contact
+                };
+                
+                const generatedContent = await generateConfirmationContent(confirmationDetails);
+                
+                // 3. Show Result
+                showCustomModal(
+                    'Booking Confirmed (Confirmation Generated)', 
+                    `Booking for **${selectedUnit.name}** is confirmed. The confirmation text/email that would be sent to the **Client** and the **Employee** is shown below: \n\n<div class="mt-3 p-4 bg-gray-100 rounded-lg border">${generatedContent}</div>`,
+                    false
+                );
+                
+                // 4. Reset form
+                unitSelect.value = '';
+                employeeSelect.value = '';
+                contactInput.value = ''; 
+                billInput.value = '0.00';
+                jobBriefInput.value = '';
+                updateBookingUI(); 
+                handleTabClick('dashboard'); 
+
+            } catch (error) {
+                console.error("Error during booking or generation:", error);
+                showCustomModal('Error', `Failed to create booking or generate confirmation: ${error.message}`);
+            } finally {
+                submitBookingButton.disabled = false;
+                submitBookingButton.textContent = 'Confirm Booking & Generate Confirmation';
+            }
+        };
+
+        /** Helper function to create a booking list item element. */
+        const createBookingElement = (booking, type) => {
+            const unit = appState.units.find(u => u.id === booking.unitId);
+            const employee = appState.employees.find(e => e.id === booking.employeeId);
+            
+            const bookingDateTime = new Date(booking.dateTime).toLocaleString('en-US', {
+                year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+            });
+
+            const li = document.createElement('div');
+            // Adjust styling based on type (Upcoming = green, History = gray)
+            const borderColor = type === 'Upcoming' ? 'border-emerald-400' : 'border-gray-300';
+            const billColor = type === 'Upcoming' ? 'text-emerald-600' : 'text-gray-500';
+            
+            li.className = `p-4 bg-white rounded-lg shadow border border-l-4 ${borderColor}`;
+            li.innerHTML = `
+                <div class="flex justify-between items-start mb-2">
+                    <p class="text-lg font-semibold text-gray-800 truncate">${unit?.name || 'Unknown Unit'}</p>
+                    <span class="text-sm font-bold ${billColor}">$${booking.calculatedBill?.toFixed(2) || 'N/A'}</span>
+                </div>
+                <p class="text-sm text-gray-600 mb-1">
+                    <span class="font-medium">When:</span> ${bookingDateTime}
+                </p>
+                <p class="text-sm text-gray-600 mb-1 truncate">
+                    <span class="font-medium">Assigned:</span> ${employee?.name || 'Unassigned'}
+                </p>
+                <div class="flex justify-between items-center mt-2 pt-2 border-t border-gray-100">
+                    <button class="text-xs text-blue-500 hover:text-blue-700 font-semibold" onclick="handleBillingSummaryGeneration('${booking.id}')">
+                        ✨ Bill Summary
+                    </button>
+                    <p class="text-xs text-gray-500">Client: ${booking.clientContact}</p>
+                </div>
+            `;
+            return li;
+        };
+        
+        /** Renders the Bookings data to the Dashboard, splitting into Upcoming and History. */
+        const renderBookings = () => {
+            upcomingBookingsList.innerHTML = '';
+            historyBookingsList.innerHTML = '';
+            
+            const now = new Date();
+            
+            // Filter and sort for display
+            const allBookings = [...appState.bookings];
+
+            // 1. Separate into Upcoming and History
+            const upcoming = allBookings
+                .filter(b => new Date(b.dateTime) >= now)
+                .sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime)); // Sort future ascending (soonest first)
+
+            const history = allBookings
+                .filter(b => new Date(b.dateTime) < now)
+                .sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime)); // Sort past descending (most recent first)
+
+            // 2. Render Upcoming
+            if (upcoming.length === 0) {
+                upcomingBookingsList.innerHTML = '<p class="text-gray-500 p-2">No future bookings scheduled. Time to book a new cleaning!</p>';
+            } else {
+                upcoming.forEach(booking => {
+                    upcomingBookingsList.appendChild(createBookingElement(booking, 'Upcoming'));
+                });
+            }
+            
+            // 3. Render History
+            if (history.length === 0) {
+                historyBookingsList.innerHTML = '<p class="text-gray-500 p-2">No booking history recorded yet.</p>';
+            } else {
+                history.forEach(booking => {
+                    historyBookingsList.appendChild(createBookingElement(booking, 'History'));
+                });
+            }
+        };
+        
+        // --- Other UI/Auth functions (kept from previous version) ---
+        
+        /** Deletes a Unit from Firestore. */
+        window.deleteUnit = async (unitId, unitName) => {
+            const userConfirmed = await showCustomModal(
+                'Delete Unit',
+                `Are you sure you want to delete the unit "${unitName}"? This cannot be undone.`,
+                true
+            );
+            if (!userConfirmed) return;
+
+            try {
+                const userBase = `artifacts/${appId}/users/${currentUserId}`;
+                await deleteDoc(doc(db, `${userBase}/units`, unitId));
+                showCustomModal('Success', `Unit "${unitName}" deleted.`);
+            } catch (error) {
+                console.error("Error deleting unit:", error);
+                showCustomModal('Error', 'Failed to delete unit. See console for details.');
+            }
+        };
+
+        /** Handles input changes to enable/disable the booking button and update unit rate display. */
+        window.updateBookingUI = () => {
+            const unitId = unitSelect.value;
+            const employeeId = employeeSelect.value;
+            const dateTime = bookingDateInput.value;
+            const clientContact = contactInput.value.trim();
+            const bill = parseFloat(billInput.value);
+            
+            const selectedUnit = appState.units.find(u => u.id === unitId);
+            
+            let canSubmit = true;
+            
+            // Check for valid bill amount
+            if (isNaN(bill) || bill < 0) {
+                billInput.classList.add('text-red-500');
+                canSubmit = false;
+            } else {
+                billInput.classList.remove('text-red-500');
+            }
+
+            // Check for selected unit
+            if (!selectedUnit) {
+                unitRateDisplay.textContent = 'Please select a unit to see the default rate.';
+                unitRateDisplay.classList.add('text-red-500');
+                canSubmit = false;
+            } else {
+                 // UPDATED: Removed /hr suffix
+                 unitRateDisplay.textContent = `Default Rate: $${selectedUnit.rate.toFixed(2)}`;
+                 unitRateDisplay.classList.remove('text-red-500');
+            }
+
+            // Check for other required fields
+            if (!employeeId || !dateTime || !clientContact) {
+                canSubmit = false;
+            }
+
+            submitBookingButton.disabled = !canSubmit;
+        };
+
+        /** Renders the Units data to the Select dropdown and Management List. */
+        const renderUnits = () => {
+            // Render Select Dropdown
+            unitSelect.innerHTML = '<option value="">-- Select an Apartment Unit --</option>';
+            appState.units.forEach(unit => {
+                const option = document.createElement('option');
+                option.value = unit.id;
+                option.textContent = `${unit.name} (${unit.address})`;
+                unitSelect.appendChild(option);
+            });
+
+            // Render Management List
+            unitsList.innerHTML = '';
+            if (appState.units.length === 0) {
+                unitsList.innerHTML = '<li class="text-gray-500 p-2">No units defined. Add one above.</li>';
+            } else {
+                appState.units.forEach(unit => {
+                    const li = document.createElement('li');
+                    li.className = 'flex justify-between items-center p-3 bg-white rounded-lg border';
+                    li.innerHTML = `
+                        <div>
+                            <p class="font-medium text-gray-800">${unit.name}</p>
+                            <!-- UPDATED: Removed /hr suffix -->
+                            <p class="text-sm text-gray-500">${unit.address} | Default Rate: $${unit.rate.toFixed(2)}</p>
+                        </div>
+                        <button class="text-red-500 hover:text-red-700 text-sm font-semibold" onclick="deleteUnit('${unit.id}', '${unit.name}')">Delete</button>
+                    `;
+                    unitsList.appendChild(li);
+                });
+            }
+        };
+
+        /** Renders the Employees data to the Select dropdown and Management List. */
+        const renderEmployees = () => {
+            // Render Select Dropdown
+            employeeSelect.innerHTML = '<option value="">-- Select Employee --</option>';
+            appState.employees.forEach(employee => {
+                const option = document.createElement('option');
+                option.value = employee.id;
+                // Displaying employee name and role in dropdown
+                option.textContent = `${employee.name} (${employee.role})`; 
+                employeeSelect.appendChild(option);
+            });
+
+            // Render Management List
+            employeesList.innerHTML = '';
+            if (appState.employees.length === 0) {
+                employeesList.innerHTML = '<li class="text-gray-500 p-2">No employees defined. Add one above.</li>';
+            } else {
+                appState.employees.forEach(employee => {
+                    const li = document.createElement('li');
+                    li.className = 'p-3 bg-white rounded-lg border';
+                    li.innerHTML = `
+                        <p class="font-medium text-gray-800">${employee.name} <span class="text-sm text-blue-500">(${employee.role})</span></p>
+                        <p class="text-sm text-gray-600">Email: ${employee.email || 'N/A'}</p>
+                        <p class="text-sm text-gray-600">Phone: ${employee.phone || 'N/A'}</p>
+                    `;
+                    employeesList.appendChild(li);
+                });
+            }
+        };
+
+        /** Handles tab switching. */
+        window.handleTabClick = (tabName) => {
+            appState.currentTab = tabName;
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+
+            document.querySelectorAll('#tabs button').forEach(btn => {
+                if (btn.getAttribute('data-tab') === tabName) {
+                    btn.classList.add('tab-active');
+                } else {
+                    btn.classList.remove('tab-active');
+                }
+            });
+        };
+
+        const addUnit = async (event) => {
+            event.preventDefault();
+            const name = document.getElementById('unit-name').value.trim();
+            const address = document.getElementById('unit-address').value.trim();
+            const rate = parseFloat(document.getElementById('unit-rate').value);
+
+            if (!name || !address || isNaN(rate) || rate <= 0) {
+                // UPDATED: Removed "hourly" from validation message
+                return showCustomModal('Validation Error', 'Please enter a valid name, address, and a rate greater than 0.');
+            }
+            
+            try {
+                const userBase = `artifacts/${appId}/users/${currentUserId}`;
+                await addDoc(collection(db, `${userBase}/units`), { name, address, rate });
+                event.target.reset();
+                showCustomModal('Success', `Unit ${name} added successfully!`);
+            } catch (error) {
+                console.error("Error adding unit:", error);
+                showCustomModal('Error', 'Failed to add unit. See console for details.');
+            }
+        };
+
+        const addEmployee = async (event) => {
+            event.preventDefault();
+            const name = document.getElementById('employee-name').value.trim();
+            const email = document.getElementById('employee-email').value.trim();
+            const phone = document.getElementById('employee-phone').value.trim();
+            const role = document.getElementById('employee-role').value;
+
+            if (!name || !email || !phone) {
+                return showCustomModal('Validation Error', 'Please enter a valid employee name, email, and phone number.');
+            }
+
+            try {
+                const userBase = `artifacts/${appId}/users/${currentUserId}`;
+                await addDoc(collection(db, `${userBase}/employees`), { name, role, email, phone });
+                event.target.reset();
+                showCustomModal('Success', `${name} (${role}) added successfully!`);
+            } catch (error) {
+                console.error("Error adding employee:", error);
+                showCustomModal('Error', 'Failed to add employee. See console for details.');
+            }
+        };
+
+        // --- Initialization ---
+
+        const initApp = async () => {
+            try {
+                // Set today's date as min value for booking date
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const day = String(now.getDate()).padStart(2, '0');
+                const hour = String(now.getHours()).padStart(2, '0');
+                const minute = String(now.getMinutes()).padStart(2, '0');
+                const minDateTime = `${year}-${month}-${day}T${hour}:${minute}`;
+
+                bookingDateInput.min = minDateTime;
+                bookingDateInput.value = minDateTime;
+
+                setLogLevel('debug');
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                // 1. Initial Authentication using provided token or anonymously
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                // 2. Auth State Listener
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        currentUserId = user.uid;
+                        userInfo.textContent = `User ID: ${user.uid}`;
+                        appState.isAuthReady = true;
+                        setupFirestoreListeners();
+                    } else {
+                        console.warn("User is signed out. Falling back to anonymous.");
+                        currentUserId = 'anonymous-user';
+                        userInfo.textContent = 'User ID: Anonymous (Signed out)';
+                    }
+                });
+
+                // 3. Attach form submit handlers
+                document.getElementById('add-unit-form').onsubmit = addUnit;
+                document.getElementById('add-employee-form').onsubmit = addEmployee;
+                
+                // 4. Initial UI update
+                window.updateBookingUI();
+                
+            } catch (error) {
+                console.error("Firebase Initialization Error:", error);
+                statusMessage.textContent = `Initialization Failed: ${error.message}`;
+                userInfo.textContent = 'Error';
+                showCustomModal('Fatal Error', 'Failed to initialize Firebase services. Check console for configuration issues.');
+            }
+        };
+
+        window.onload = initApp;
+    </script>
+</body>
+</html>
+
